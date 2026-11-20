@@ -1,0 +1,58 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LILU_VERSION: 1.7.2
+  MACKERNELSDK_COMMIT: 05094e5e88cec7caedbfb35e8449ed0db94bf95b
+
+jobs:
+  build:
+    runs-on: macos-15-intel
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch Lilu SDK and MacKernelSDK
+        run: |
+          curl -fsSL -o lilu.zip \
+            "https://github.com/acidanthera/Lilu/releases/download/$LILU_VERSION/Lilu-$LILU_VERSION-DEBUG.zip"
+          unzip -q lilu.zip 'Lilu.kext/*' -d .
+          git clone -q https://github.com/acidanthera/MacKernelSDK
+          git -C MacKernelSDK checkout -q "$MACKERNELSDK_COMMIT"
+
+      - name: Test
+        run: |
+          clang++ -std=c++17 -I Tests/stubs -DPRODUCT_NAME=SharedCacheWire -DMODULE_VERSION=0.0.0 \
+            Tests/wire_test.cpp -o wire_test
+          ./wire_test
+
+      - name: Build
+        run: |
+          xcodebuild -project SharedCacheWire.xcodeproj -configuration Release -arch x86_64
+          VERSION=$(xcodebuild -project SharedCacheWire.xcodeproj -configuration Release -showBuildSettings \
+                    | awk '$1 == "MODULE_VERSION" {print $3}')
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SharedCacheWire-${{ env.VERSION }}
+          path: build/Release/*.zip
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match MODULE_VERSION $VERSION"; exit 1
+          fi
+          gh release create "$GITHUB_REF_NAME" build/Release/*.zip --title "SharedCacheWire $VERSION" --notes \
+            "Load it last in OpenCore Kernel > Add, after every kext that patches the dyld shared cache. See README.md."
