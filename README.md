@@ -63,8 +63,9 @@ clang++ -std=c++17 -I Tests/stubs -DPRODUCT_NAME=SharedCacheWire -DMODULE_VERSIO
 
 ## CI and releases
 
-`.github/workflows/build.yml` runs the test and builds on every push and pull request. Pushing a tag `vX.Y.Z` that
-matches `MODULE_VERSION` in the Xcode project publishes a GitHub Release with the zip (kext and dSYM).
+`.github/workflows/build.yml` runs the test and builds on every push and pull request. On a push to `main`, if
+`MODULE_VERSION` in the Xcode project has no release yet, it creates the tag `vX.Y.Z` and publishes a GitHub Release
+with the zip (kext and dSYM). To release, bump `MODULE_VERSION` and push.
 
 ## Disclaimer
 

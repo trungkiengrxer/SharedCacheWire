@@ -3,7 +3,6 @@ name: Build
 on:
   push:
     branches: [main]
-    tags: ['v*']
   pull_request:
   workflow_dispatch:
 
@@ -46,13 +45,12 @@ jobs:
           name: SharedCacheWire-${{ env.VERSION }}
           path: build/Release/*.zip
 
+      # A MODULE_VERSION that has no release yet is published from main, tag included.
       - name: Release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
-            echo "Tag $GITHUB_REF_NAME does not match MODULE_VERSION $VERSION"; exit 1
-          fi
-          gh release create "$GITHUB_REF_NAME" build/Release/*.zip --title "SharedCacheWire $VERSION" --notes \
+          if gh release view "v$VERSION" >/dev/null 2>&1; then echo "v$VERSION already released"; exit 0; fi
+          gh release create "v$VERSION" build/Release/*.zip --target "$GITHUB_SHA" --title "SharedCacheWire $VERSION" --notes \
             "Load it last in OpenCore Kernel > Add, after every kext that patches the dyld shared cache. See README.md."
